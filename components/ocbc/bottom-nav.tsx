@@ -23,41 +23,13 @@ export function BottomNav({
       <ul className="flex items-stretch justify-between px-2 pt-2 pb-5">
         {items.map(({ key, label, icon: Icon }) => {
           const isActive = active === key
-          const isAssistant = key === 'assistant'
-
-          if (isAssistant) {
-            return (
-              <li key={key} className="flex flex-1 justify-center">
-                <button
-                  onClick={() => onChange(key)}
-                  className="flex flex-col items-center gap-1"
-                  aria-label="Voice AI Assistant"
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  <span
-                    className={`-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 ring-4 ring-card transition-transform ${
-                      isActive ? 'scale-105' : ''
-                    }`}
-                  >
-                    <Icon className="h-6 w-6" />
-                  </span>
-                  <span
-                    className={`text-[10px] font-medium ${
-                      isActive ? 'text-primary' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {label}
-                  </span>
-                </button>
-              </li>
-            )
-          }
 
           return (
             <li key={key} className="flex flex-1 justify-center">
               <button
                 onClick={() => onChange(key)}
                 className="flex flex-col items-center gap-1 py-1"
+                aria-label={key === 'assistant' ? 'Voice AI Assistant' : undefined}
                 aria-current={isActive ? 'page' : undefined}
               >
                 <Icon
