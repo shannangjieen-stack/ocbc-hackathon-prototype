@@ -14,7 +14,7 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: 'OCBC AI — Smart Banking',
+  title: 'OCBC Pulse — Smart Banking',
   description:
     'OCBC mobile banking reimagined with agentic AI at its core. Insights, spending, opportunities and a voice assistant that helps you spend and save smarter.',
   generator: 'v0.app',
