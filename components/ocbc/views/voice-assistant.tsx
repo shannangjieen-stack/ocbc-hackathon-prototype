@@ -1,44 +1,68 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronLeft, Mic, RotateCcw, Send, Sparkles, Wand2 } from 'lucide-react'
-import { AVAILABLE_CASHFLOW, ConversationAnswers, DEFAULT_SAVINGS, DEFAULT_TRIP_COST, GOAL_TOTAL, JourneyState, MonthPlan, addAudit, clonePlan, commitmentLabel, currency, makeDemoPlan, remainingGoal, totalContribution } from '@/lib/ocbc-journey'
+import { Check, ChevronDown, Mic, RotateCcw, Send, Sparkles, Wand2 } from 'lucide-react'
+import { AVAILABLE_CASHFLOW, GOAL_TOTAL, JourneyState, MonthPlan, clonePlan, currency, exportPlanText, planValid, remainingGoal, totalContribution } from '@/lib/ocbc-journey'
 
-type Props = { journey: JourneyState; onUpdate: (next: Partial<JourneyState>) => void; onNavigate?: (view: 'assistant' | 'report') => void }
+type Props = { journey: JourneyState; onUpdate: (next: Partial<JourneyState>) => void }
 type Msg = { role: 'user' | 'ai'; text: string }
-type Step = 'destination' | 'date' | 'cost' | 'savings' | 'commitments' | 'commitmentMonth' | 'commitmentAmount' | 'priority' | 'review' | 'done'
-const initial = [{ role: 'ai', text: "Hi Amelia, I'm OCBC Pulse. What would you like to plan for?" }] as Msg[]
 
-export function VoiceAssistant({ journey, onUpdate, onNavigate }: Props) {
-  const [messages, setMessages] = useState<Msg[]>(initial)
-  const [step, setStep] = useState<Step>('destination')
-  const [answers, setAnswers] = useState<ConversationAnswers>(journey.conversationAnswers)
-  const [custom, setCustom] = useState('')
+export function VoiceAssistant({ journey, onUpdate }: Props) {
+  const [messages, setMessages] = useState<Msg[]>([{ role: 'ai', text: "Hi Amelia, I'm OCBC Pulse. Tell me what you're planning and I'll turn it into a money plan." }])
+  const [input, setInput] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
-  const [editingPlan, setEditingPlan] = useState(false)
+  const [showPlan, setShowPlan] = useState(false)
+  const [editing, setEditing] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, analyzing])
-  const push = (role: Msg['role'], text: string) => setMessages((m) => [...m, { role, text }])
-  const save = (patch: ConversationAnswers, next: Step, answerText: string) => { const merged = { ...answers, ...patch }; setAnswers(merged); onUpdate({ conversationAnswers: merged, status: 'proposed' }); push('user', answerText); setTimeout(() => push('ai', questionFor(next)), 180); setStep(next) }
-  const questionFor = (s: Step) => ({ destination: 'Where are you planning to go?', date: 'When are you planning to travel?', cost: 'How much do you expect the trip to cost?', savings: 'How much have you already saved for the trip?', commitments: 'Do you have any major expenses or commitments before the trip?', commitmentMonth: 'When is your family celebration?', commitmentAmount: 'How much do you expect to spend on it?', priority: 'What matters most when building your plan?', review: 'Review your answers before I analyse the plan.' } as Record<string, string>)[s] ?? ''
-  const choose = (value: string) => {
-    if (step === 'destination') return save({ destination: value }, 'date', value)
-    if (step === 'date') return save({ travelDate: value }, 'cost', value)
-    if (step === 'cost') return save({ tripCost: Number(value.replace(/[^0-9]/g, '')) }, 'savings', value)
-    if (step === 'savings') return save({ existingSavings: Number(value.replace(/[^0-9]/g, '')) }, 'commitments', value)
-    if (step === 'commitments') { const selected = value === 'No major commitments' ? [] : [value]; return save({ commitments: selected }, selected.length ? 'commitmentMonth' : 'priority', value) }
-    if (step === 'commitmentMonth') return save({ commitmentDetails: { ...(answers.commitmentDetails ?? {}), 'Family celebration': { month: value, amount: 400 } } }, 'commitmentAmount', value)
-    if (step === 'commitmentAmount') return save({ commitmentDetails: { ...(answers.commitmentDetails ?? {}), 'Family celebration': { month: answers.commitmentDetails?.['Family celebration']?.month ?? 'October', amount: Number(value.replace(/[^0-9]/g, '')) } } }, 'priority', value)
-    if (step === 'priority') return save({ priority: value }, 'review', value)
+
+  const ask = (text: string) => {
+    if (!text.trim()) return
+    setMessages((m) => [...m, { role: 'user', text }])
+    setInput('')
+    if (/japan|holiday|trip|travel/i.test(text)) {
+      setAnalyzing(true)
+      setTimeout(() => { setAnalyzing(false); setShowPlan(true); setMessages((m) => [...m, { role: 'ai', text: `I mapped a ${currency(GOAL_TOTAL)} Japan trip across September to December. Your contributions total ${currency(totalContribution(journey.plan))}, leaving ${currency(remainingGoal(journey.plan))} to refine.` }]) }, 900)
+    } else {
+      setTimeout(() => setMessages((m) => [...m, { role: 'ai', text: 'I can help you plan a goal, adjust your monthly contribution, or explain how each spending category affects your cashflow.' }]), 500)
+    }
   }
-  const analyse = () => { setAnalyzing(true); push('user', 'Confirm and Analyse'); setTimeout(() => { const plan = makeDemoPlan(answers); const actions = addAudit(addAudit(journey.auditActions, 'Trip planning conversation started'), 'Plan generated by Pulse'); onUpdate({ plan, proposedPlan: plan, status: 'proposed', auditActions: actions }); setAnalyzing(false); setStep('done'); push('ai', `Your plan is ready. You need ${currency(remainingGoal(plan, answers.tripCost, answers.existingSavings))} more towards your ${currency(answers.tripCost ?? DEFAULT_TRIP_COST)} goal. October is lower because of your commitments.`) }, 850) }
-  const approve = () => { const now = new Date().toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' }); const plan = journey.proposedPlan ?? journey.plan; onUpdate({ approvedPlan: clonePlan(plan), plan: clonePlan(plan), status: 'approved', reportGenerated: true, report: { generatedAt: now }, approvalTimestamp: now, auditActions: addAudit(addAudit(journey.auditActions, 'Plan approved by customer'), 'Financial Report generated') }); push('ai', 'Your Japan Trip plan has been approved. I’ve added the monthly allocations to your plan and prepared a Financial Report so you can review the complete timeline.') }
-  const reset = () => { onUpdate({ ...journey, status: 'draft', plan: makeDemoPlan({}), proposedPlan: null, approvedPlan: null, reportGenerated: false, report: null, conversationAnswers: {}, auditActions: [] }); setAnswers({}); setStep('destination'); setMessages(initial) }
-  const options: Record<string, string[]> = { destination: ['Japan', 'South Korea', 'Europe', 'Enter another destination'], date: ['October 2026', 'November 2026', 'December 2026', 'Choose another date'], cost: ['S$2,500', 'S$3,500', 'S$5,000', 'Enter another amount'], savings: ['S$0', 'S$500', 'S$800', 'Enter another amount'], commitments: ['Public holiday plans', 'Family celebration', 'Large bill payment', 'Existing savings goal', 'No major commitments'], commitmentMonth: ['September', 'October', 'November', 'Choose another month'], commitmentAmount: ['S$200', 'S$400', 'S$600', 'Enter another amount'], priority: ['Keep monthly spending comfortable', 'Reach the goal as early as possible', 'Protect Dining and Shopping', 'Use Pulse’s recommendation'] }
-  const currentOptions = options[step] ?? []
-  return <div className="relative flex h-full flex-col bg-[#3b0710] text-white"><div className="absolute inset-0 bg-gradient-to-b from-primary/60 via-[#5c0b18] to-[#25040a]" /><div className="relative flex h-full flex-col"><header className="flex items-center gap-2 px-5 pt-3"><Sparkles className="h-5 w-5" /><div><p className="font-heading font-bold">OCBC Pulse</p><p className="text-[11px] text-white/70">Voice &amp; chat banking</p></div></header><div className="flex-1 space-y-3 overflow-y-auto px-5 py-4 no-scrollbar">{messages.map((m, i) => <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : ''}`}><p className={`max-w-[86%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user' ? 'rounded-br-sm bg-primary' : 'rounded-bl-sm bg-white/95 text-foreground'}`}>{m.text}</p></div>)}{analyzing && <div className="flex items-center gap-2 text-sm text-white/80"><Wand2 className="h-4 w-4 animate-pulse" /> Analysing your cashflow and trip goal…</div>}{step === 'review' && <Review answers={answers} onConfirm={analyse} onEdit={() => { setStep('destination'); push('ai', questionFor('destination')) }} onCancel={reset} />}{step === 'done' && journey.status !== 'approved' && <PlanCard plan={journey.proposedPlan ?? journey.plan} answers={answers} onApprove={approve} />}{journey.status === 'approved' && <div className="rounded-2xl bg-white/95 p-4 text-sm text-foreground"><div className="flex items-center gap-2 font-semibold text-[var(--success)]"><Check className="h-4 w-4" /> Plan approved</div><div className="mt-3 grid gap-2"><button onClick={() => onNavigate?.('report')} className="rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground">View Financial Report</button><button onClick={() => setEditingPlan(true)} className="rounded-full border border-border px-4 py-2 font-semibold">Adjust Approved Plan</button><button className="rounded-full border border-border px-4 py-2 font-semibold">Continue Chatting</button></div></div>}{editingPlan && <PlanCard plan={journey.plan} answers={answers} onApprove={() => { setEditingPlan(false); approve() }} />}{(step !== 'review' && step !== 'done' && currentOptions.length > 0) && <div className="grid gap-2">{currentOptions.map((o) => <button key={o} onClick={() => choose(o)} className="rounded-full border border-white/25 bg-white/10 px-4 py-2 text-left text-sm hover:bg-white/20">{o}</button>)}</div>}<div ref={endRef} /></div><div className="flex gap-2 px-5 pb-3"><input value={custom} onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { choose(custom); setCustom('') } }} placeholder="Or type your answer…" className="min-w-0 flex-1 rounded-full bg-white/95 px-4 py-3 text-sm text-foreground outline-none" /><button onClick={() => { if (custom.trim()) { choose(custom); setCustom('') } }} aria-label="Send message" className="rounded-full bg-primary p-3"><Send className="h-5 w-5" /></button></div><div className="flex items-center gap-3 px-5 pb-4"><button onClick={() => { push('user', 'Voice input'); push('ai', 'I’m listening. Tell me your answer, or choose a reply above.') }} aria-label="Activate voice input" className="flex h-12 w-12 items-center justify-center rounded-full bg-primary"><Mic className="h-5 w-5" /></button><button onClick={reset} className="flex items-center gap-1 text-xs text-white/70"><RotateCcw className="h-3 w-3" /> Reset Demo</button></div></div></div>
+
+  const updateMonth = (index: number, field: 'contribution' | 'dining' | 'shopping' | 'travel', value: number) => {
+    const next = clonePlan(journey.plan)
+    if (field === 'contribution') next[index].contribution = value
+    else next[index].categories[field] = value
+    onUpdate({ plan: next, status: 'draft' })
+  }
+
+  const reset = () => {
+    const defaults = [
+      { month: 'Sep', contribution: 700, categories: { dining: 420, shopping: 380, travel: 200 } },
+      { month: 'Oct', contribution: 850, categories: { dining: 400, shopping: 350, travel: 180 } },
+      { month: 'Nov', contribution: 950, categories: { dining: 390, shopping: 330, travel: 160 } },
+      { month: 'Dec', contribution: 700, categories: { dining: 450, shopping: 400, travel: 220 } },
+    ]
+    onUpdate({ plan: defaults, status: 'draft' })
+    setShowPlan(false)
+    setEditing(false)
+    setMessages([{ role: 'ai', text: 'Plan reset. What would you like to work towards?' }])
+  }
+  const valid = planValid(journey.plan)
+
+  return <div className="relative flex h-full flex-col bg-[#3b0710] text-white"><div className="absolute inset-0 bg-gradient-to-b from-primary/60 via-[#5c0b18] to-[#25040a]" />
+    <div className="relative flex h-full flex-col"><header className="px-5 pt-3"><div className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15"><Sparkles className="h-4 w-4" /></span><div><p className="font-heading text-base font-bold">OCBC Pulse</p><p className="text-[11px] text-white/70">Voice &amp; chat banking</p></div></div></header>
+      <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4 no-scrollbar">{messages.map((m, i) => <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}><p className={`max-w-[84%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user' ? 'rounded-br-sm bg-primary' : 'rounded-bl-sm bg-white/95 text-foreground'}`}>{m.text}</p></div>)}
+        {analyzing && <div className="flex items-center gap-2 text-sm text-white/80"><Wand2 className="h-4 w-4 animate-pulse" /> Analysing your cashflow and trip goal…</div>}
+        {showPlan && <section className="rounded-3xl bg-white p-4 text-foreground shadow-xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Japan trip plan</p><p className="mt-1 font-heading text-lg font-bold">Save {currency(GOAL_TOTAL)} by December</p><p className="text-xs text-muted-foreground">{currency(remainingGoal(journey.plan))} remaining · {currency(AVAILABLE_CASHFLOW)} monthly cashflow</p></div><button onClick={() => setEditing(!editing)} className="rounded-full bg-secondary p-2" aria-label="Adjust plan"><ChevronDown className={`h-4 w-4 transition-transform ${editing ? 'rotate-180' : ''}`} /></button></div>
+          <div className="mt-3 space-y-2">{journey.plan.map((m, i) => <div key={m.month} className="rounded-2xl bg-secondary/60 p-3"><div className="flex items-center justify-between"><span className="text-sm font-bold">{m.month}</span>{editing ? <label className="flex items-center gap-1 text-xs">Save S$ <input type="number" min="0" value={m.contribution} onChange={(e) => updateMonth(i, 'contribution', Math.max(0, Number(e.target.value)))} className="w-16 rounded-lg border bg-card px-2 py-1 text-right" /></label> : <span className="text-sm font-semibold text-primary">{currency(m.contribution)}</span>}</div>{editing && <div className="mt-2 grid grid-cols-3 gap-2">{(['dining','shopping','travel'] as const).map((key) => <label key={key} className="text-[10px] text-muted-foreground">{key}<input type="number" min="0" value={m.categories[key]} onChange={(e) => updateMonth(i, key, Math.max(0, Number(e.target.value)))} className="mt-1 w-full rounded-lg border bg-card px-2 py-1 text-xs text-foreground" /></label>)}</div>}</div>)}</div>
+          {!valid && <p className="mt-2 text-xs font-semibold text-primary">Category allocations exceed available monthly cashflow. Reduce a category before approving.</p>}
+          <div className="mt-3 flex gap-2"><button onClick={() => setEditing(true)} className="flex-1 rounded-full border border-border py-2 text-xs font-semibold">Adjust plan</button><button disabled={!valid} onClick={() => onUpdate({ status: 'approved' })} className="flex-1 rounded-full bg-primary py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40">{journey.status === 'approved' ? 'Approved' : 'Approve plan'}</button></div>
+          <button onClick={reset} className="mt-3 flex w-full items-center justify-center gap-1 text-xs text-muted-foreground"><RotateCcw className="h-3 w-3" /> Reset journey</button>
+        </section>}
+        <div ref={endRef} /></div>
+      <div className="flex gap-2 overflow-x-auto px-5 pb-3 no-scrollbar">{['Plan a Japan trip for S$3,200','How does this affect my cashflow?','Adjust my monthly contribution'].map((p) => <button key={p} onClick={() => ask(p)} className="shrink-0 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs">{p}</button>)}</div>
+      <div className="flex items-center gap-3 px-5 pb-4"><button onClick={() => ask('Plan a Japan trip for S$3,200')} aria-label="Activate voice input" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"><Mic className="h-6 w-6" /></button><form onSubmit={(e) => { e.preventDefault(); ask(input) }} className="flex flex-1 items-center gap-2 rounded-full bg-white/95 px-4 py-2.5"><input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask anything…" className="flex-1 bg-transparent text-sm text-foreground outline-none" /><button type="submit" aria-label="Send message" disabled={!input.trim()} className="text-primary disabled:opacity-40"><Send className="h-5 w-5" /></button></form></div>
+    </div></div>
 }
-function Review({ answers, onConfirm, onEdit, onCancel }: { answers: ConversationAnswers; onConfirm: () => void; onEdit: () => void; onCancel: () => void }) { const commitments = answers.commitments?.map(commitmentLabel).join(' and ') || 'None'; return <section className="rounded-3xl bg-white p-4 text-foreground"><p className="font-heading text-lg font-bold">Your trip plan</p><div className="mt-3 space-y-2 text-sm"><p>Destination: <b>{answers.destination}</b></p><p>Travel date: <b>{answers.travelDate}</b></p><p>Estimated cost: <b>{currency(answers.tripCost ?? 0)}</b></p><p>Already saved: <b>{currency(answers.existingSavings ?? 0)}</b></p><p>Remaining amount: <b>{currency((answers.tripCost ?? 0) - (answers.existingSavings ?? 0))}</b></p><p>{answers.commitmentDetails?.['Family celebration']?.month ?? 'October'} commitments: <b>{commitments}</b></p><p>Priority: <b>{answers.priority}</b></p></div><div className="mt-4 grid gap-2"><button onClick={onConfirm} className="rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Confirm and Analyse</button><button onClick={onEdit} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold">Edit Details</button><button onClick={onCancel} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold">Cancel</button></div></section> }
-function PlanCard({ plan, answers, onApprove }: { plan: MonthPlan[]; answers: ConversationAnswers; onApprove: () => void }) { return <section className="rounded-3xl bg-white p-4 text-foreground"><p className="text-xs font-bold uppercase tracking-wide text-primary">Pulse recommendation</p><p className="mt-1 font-heading text-lg font-bold">Save {currency((answers.tripCost ?? DEFAULT_TRIP_COST) - (answers.existingSavings ?? DEFAULT_SAVINGS))} by {answers.travelDate}</p>{plan.map((m) => <div key={m.month} className="mt-2 flex justify-between rounded-xl bg-secondary p-3 text-sm"><span>{m.month}</span><b className="text-primary">{currency(m.contribution)}</b></div>)}<p className="mt-3 text-xs text-muted-foreground">October is lower because of the commitments you entered. Total planned: {currency(totalContribution(plan))}.</p><button onClick={onApprove} className="mt-3 w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground">Approve Plan</button></section> }
