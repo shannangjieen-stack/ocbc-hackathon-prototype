@@ -27,7 +27,7 @@ const baseOpportunities = [
     desc: 'Protect an upcoming trip against selected disruptions, medical emergencies and other covered events.',
     image: '/images/insurance.png',
     icon: ShieldCheck,
-    reason: 'Based on a broad spending category',
+    reason: 'Based on your recent activity',
   },
   {
     key: 'overseas',
@@ -36,7 +36,7 @@ const baseOpportunities = [
     desc: 'Review overseas card settings and learn how OCBC helps protect international transactions.',
     image: '/images/travel.png',
     icon: ShieldCheck,
-    reason: 'Based on a broad spending category',
+    reason: 'Based on your recent activity',
   },
   {
     key: 'fx',
@@ -45,7 +45,7 @@ const baseOpportunities = [
     desc: 'Explore ways to prepare for possible overseas spending and currency conversion.',
     image: '/images/currency.png',
     icon: RefreshCcw,
-    reason: 'Based on a broad spending category',
+    reason: 'Based on your recent activity',
   },
   {
     key: 'budget',
@@ -54,7 +54,7 @@ const baseOpportunities = [
     desc: 'Create a travel budget without sharing your itinerary.',
     image: '/images/goals.png',
     icon: Plane,
-    reason: 'Based on a broad spending category',
+    reason: 'Based on your recent activity',
   },
 ]
 
@@ -113,7 +113,7 @@ export function OpportunityHub({ onNavigate }: OpportunityHubProps) {
           <p className="text-sm leading-relaxed text-muted-foreground">Pulse noticed a recent travel-related transaction. Would you like to explore support that may be useful for an upcoming trip?</p>
           <div className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-3 text-xs text-muted-foreground"><b className="text-foreground">Transaction signal:</b> Trip.com · S$1,240 · Travel · Card payment</div>
           <button onClick={() => setShowWhy(!showWhy)} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary"><CircleHelp className="h-3.5 w-3.5" /> Why am I seeing this? {showWhy ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</button>
-          {showWhy && <div className="mt-3 space-y-2 rounded-2xl bg-card p-3 text-xs leading-relaxed text-muted-foreground"><p>You recently made a transaction with a merchant categorised as travel-related. Pulse does not receive your flight destination, itinerary or passenger details from this transaction.</p><p>Recommendations are based on broad transaction categories and information you choose to share.</p></div>}
+          {showWhy && <div className="mt-3 space-y-2 rounded-2xl bg-card p-3 text-xs leading-relaxed text-muted-foreground"><p>You recently made a transaction with a merchant categorised as travel-related. Pulse does not receive your flight destination, itinerary or passenger details from this transaction.</p><p>Recommendations use recent activity and information you choose to share.</p></div>}
           <div className="mt-4 flex gap-2"><button onClick={() => setExplored('travel')} className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Explore <ArrowRight className="h-4 w-4" /></button><button onClick={() => setHidden(true)} className="rounded-full border border-border px-4 py-2.5 text-sm font-semibold text-foreground">Not interested</button></div>
           {explored === 'travel' && <p className="mt-3 text-xs font-semibold text-success">You can review these optional suggestions below. Nothing is activated automatically.</p>}
         </div>
