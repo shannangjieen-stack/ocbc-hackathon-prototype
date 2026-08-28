@@ -21,9 +21,9 @@ import {
 } from '@/lib/ocbc-data'
 
 export function HomeDashboard({
-  onNavigate,
+  onNavigate = () => {},
 }: {
-  onNavigate: (v: ViewKey) => void
+  onNavigate?: (v: ViewKey) => void
 }) {
   const total = accounts.reduce((s, a) => s + a.balance, 0)
 
